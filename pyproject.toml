@@ -102,13 +102,13 @@ all = [
 "aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
 
 [project.urls]
-Homepage = "https://github.com/timwukp/aws-security-posture-advisor-mcp"
-Repository = "https://github.com/timwukp/aws-security-posture-advisor-mcp"
-Documentation = "https://github.com/timwukp/aws-security-posture-advisor-mcp#readme"
-Issues = "https://github.com/timwukp/aws-security-posture-advisor-mcp/issues"
-Changelog = "https://github.com/timwukp/aws-security-posture-advisor-mcp/blob/main/CHANGELOG.md"
-"Security Policy" = "https://github.com/timwukp/aws-security-posture-advisor-mcp/blob/main/docs/SECURITY.md"
-"API Documentation" = "https://github.com/timwukp/aws-security-posture-advisor-mcp/blob/main/docs/API.md"
+Homepage = "https://github.com/awslabs/aws-security-posture-advisor-mcp"
+Repository = "https://github.com/awslabs/aws-security-posture-advisor-mcp"
+Documentation = "https://awslabs.github.io/aws-security-posture-advisor-mcp/"
+Issues = "https://github.com/awslabs/aws-security-posture-advisor-mcp/issues"
+Changelog = "https://github.com/awslabs/aws-security-posture-advisor-mcp/blob/main/CHANGELOG.md"
+"Security Policy" = "https://github.com/awslabs/aws-security-posture-advisor-mcp/blob/main/SECURITY.md"
+"API Documentation" = "https://awslabs.github.io/aws-security-posture-advisor-mcp/api/"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -124,3 +124,66 @@ version = {attr = "awslabs.aws_security_posture_advisor.__version__"}
 [tool.setuptools]
 zip-safe = false
 include-package-data = true
+
+[tool.pytest.ini_options]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "live: marks tests that make live AWS API calls",
+    "unit: marks unit tests",
+    "integration: marks integration tests",
+    "slow: marks slow tests",
+]
+
+[tool.black]
+line-length = 99
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+line-length = 99
+select = ["C", "D", "E", "F", "I", "W", "UP"]
+ignore = ["C901", "E501", "D100", "D106", "D107"]
+target-version = "py310"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"__init__.py" = ["D104"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
