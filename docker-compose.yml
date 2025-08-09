@@ -1,0 +1,221 @@
+# Docker Compose configuration for AWS Security Posture Advisor MCP Server
+version: '3.8'
+
+services:
+  # Main MCP server service
+  security-advisor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VERSION: ${VERSION:-0.1.0}
+        VCS_REF: ${VCS_REF:-}
+    image: awslabs/aws-security-posture-advisor:${VERSION:-latest}
+    container_name: aws-security-posture-advisor
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - AWS_SECURITY_ADVISOR_PROFILE_NAME=${AWS_SECURITY_ADVISOR_PROFILE_NAME:-}
+      
+      # Server Configuration
+      - FASTMCP_LOG_LEVEL=${FASTMCP_LOG_LEVEL:-INFO}
+      - AWS_SECURITY_ADVISOR_READ_ONLY=${AWS_SECURITY_ADVISOR_READ_ONLY:-true}
+      - AWS_SECURITY_ADVISOR_AUDIT_LOGGING=${AWS_SECURITY_ADVISOR_AUDIT_LOGGING:-true}
+      - AWS_SECURITY_ADVISOR_LOG_TO_FILE=${AWS_SECURITY_ADVISOR_LOG_TO_FILE:-true}
+      
+      # Performance Configuration
+      - AWS_SECURITY_ADVISOR_MAX_CONCURRENT=${AWS_SECURITY_ADVISOR_MAX_CONCURRENT:-10}
+      - AWS_SECURITY_ADVISOR_TIMEOUT=${AWS_SECURITY_ADVISOR_TIMEOUT:-300}
+      - AWS_SECURITY_ADVISOR_ENABLE_CACHE=${AWS_SECURITY_ADVISOR_ENABLE_CACHE:-true}
+      - AWS_SECURITY_ADVISOR_CACHE_TTL=${AWS_SECURITY_ADVISOR_CACHE_TTL:-300}
+      
+      # Security Configuration
+      - AWS_SECURITY_ADVISOR_ENCRYPT_LOGS=${AWS_SECURITY_ADVISOR_ENCRYPT_LOGS:-true}
+      - AWS_SECURITY_ADVISOR_SANITIZE_LOGS=${AWS_SECURITY_ADVISOR_SANITIZE_LOGS:-true}
+      - AWS_SECURITY_ADVISOR_REQUIRE_TLS=${AWS_SECURITY_ADVISOR_REQUIRE_TLS:-true}
+    
+    # Volume mounts
+    volumes:
+      # AWS credentials (if using files)
+      - ${HOME}/.aws:/app/.aws:ro
+      
+      # Configuration
+      - ${PWD}/config:/app/config:ro
+      
+      # Logs
+      - security-advisor-logs:/app/logs
+      
+      # Cache
+      - security-advisor-cache:/app/cache
+    
+    # Network configuration
+    networks:
+      - security-advisor-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import awslabs.aws_security_posture_advisor; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        labels: "service=aws-security-posture-advisor"
+
+  # Development service (optional)
+  security-advisor-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    image: awslabs/aws-security-posture-advisor:dev
+    container_name: aws-security-posture-advisor-dev
+    profiles:
+      - dev
+    
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - FASTMCP_LOG_LEVEL=DEBUG
+      - AWS_SECURITY_ADVISOR_DEBUG=true
+    
+    volumes:
+      - ${PWD}:/app:rw
+      - ${HOME}/.aws:/app/.aws:ro
+      - security-advisor-dev-logs:/app/logs
+    
+    networks:
+      - security-advisor-network
+    
+    # Override command for development
+    command: ["python", "-m", "awslabs.aws_security_posture_advisor.server", "--debug"]
+    
+    # Enable interactive mode
+    stdin_open: true
+    tty: true
+
+  # Redis cache (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: security-advisor-redis
+    profiles:
+      - cache
+    restart: unless-stopped
+    
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-securepassword}
+    
+    volumes:
+      - security-advisor-redis:/data
+    
+    networks:
+      - security-advisor-network
+    
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring with Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: security-advisor-prometheus
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - security-advisor-prometheus:/prometheus
+    
+    networks:
+      - security-advisor-network
+    
+    ports:
+      - "9090:9090"
+
+  # Grafana dashboard (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: security-advisor-grafana
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    
+    volumes:
+      - security-advisor-grafana:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    
+    networks:
+      - security-advisor-network
+    
+    ports:
+      - "3000:3000"
+    
+    depends_on:
+      - prometheus
+
+# Named volumes
+volumes:
+  security-advisor-logs:
+    driver: local
+  security-advisor-cache:
+    driver: local
+  security-advisor-dev-logs:
+    driver: local
+  security-advisor-redis:
+    driver: local
+  security-advisor-prometheus:
+    driver: local
+  security-advisor-grafana:
+    driver: local
+
+# Networks
+networks:
+  security-advisor-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
