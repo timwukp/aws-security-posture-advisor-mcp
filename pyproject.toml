@@ -1,0 +1,126 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "awslabs.aws-security-posture-advisor"
+dynamic = ["version"]
+description = "MCP server for AWS security posture assessment and intelligent remediation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "AWS Labs", email = "aws-labs@amazon.com"}
+]
+maintainers = [
+    {name = "AWS Labs Security Team", email = "aws-labs-security@amazon.com"}
+]
+keywords = [
+    "aws", 
+    "security", 
+    "mcp", 
+    "compliance", 
+    "threat-detection",
+    "security-posture",
+    "vulnerability-assessment",
+    "incident-response",
+    "security-automation"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+    "Topic :: System :: Monitoring",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Environment :: Console",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "mcp>=1.11.0",
+    "pydantic>=2.10.6",
+    "boto3>=1.38.18",
+    "botocore>=1.38.18",
+    "loguru>=0.7.3",
+    "fastapi>=0.104.0",
+    "typing-extensions>=4.8.0",
+    "pyyaml>=6.0.1",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "boto3-stubs[essential]>=1.34.0",
+    "types-PyYAML>=6.0.0",
+    "pre-commit>=3.0.0",
+]
+
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "moto[all]>=4.2.0",
+]
+
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.22.0",
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.0",
+]
+
+all = [
+    "awslabs.aws-security-posture-advisor[dev,test,docs]"
+]
+
+[project.scripts]
+"awslabs.aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
+"aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
+"security-advisor-version" = "scripts.version:main"
+
+[project.entry-points."mcp.servers"]
+"aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
+
+[project.urls]
+Homepage = "https://github.com/timwukp/aws-security-posture-advisor-mcp"
+Repository = "https://github.com/timwukp/aws-security-posture-advisor-mcp"
+Documentation = "https://github.com/timwukp/aws-security-posture-advisor-mcp#readme"
+Issues = "https://github.com/timwukp/aws-security-posture-advisor-mcp/issues"
+Changelog = "https://github.com/timwukp/aws-security-posture-advisor-mcp/blob/main/CHANGELOG.md"
+"Security Policy" = "https://github.com/timwukp/aws-security-posture-advisor-mcp/blob/main/docs/SECURITY.md"
+"API Documentation" = "https://github.com/timwukp/aws-security-posture-advisor-mcp/blob/main/docs/API.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["awslabs*", "scripts*"]
+
+[tool.setuptools.package-data]
+"awslabs.aws_security_posture_advisor" = ["py.typed"]
+"*" = ["*.md", "*.txt", "*.yaml", "*.yml", "*.json"]
+
+[tool.setuptools.dynamic]
+version = {attr = "awslabs.aws_security_posture_advisor.__version__"}
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
