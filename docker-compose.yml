@@ -18,11 +18,13 @@ services:
     
     # Environment configuration
     environment:
-      # AWS Configuration
+      # AWS Configuration - Use IAM roles instead of credentials
       - AWS_REGION=${AWS_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      # SECURITY: AWS credentials should NOT be passed as environment variables
+      # Use one of these secure alternatives:
+      # 1. IAM roles for EC2/ECS/Fargate (recommended)
+      # 2. AWS profile with ~/.aws/credentials file (development only)
+      # 3. AWS Secrets Manager or Parameter Store for credential management
       - AWS_SECURITY_ADVISOR_PROFILE_NAME=${AWS_SECURITY_ADVISOR_PROFILE_NAME:-}
       
       # Server Configuration

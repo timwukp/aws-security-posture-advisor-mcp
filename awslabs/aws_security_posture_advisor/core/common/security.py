@@ -23,6 +23,10 @@ SENSITIVE_PATTERNS = {
     'aws_access_key': re.compile(r'AKIA[0-9A-Z]{16}', re.IGNORECASE),
     'aws_secret_key': re.compile(r'[A-Za-z0-9/+=]{40}'),
     'aws_session_token': re.compile(r'[A-Za-z0-9/+=]{100,}'),
+    'aws_account_id': re.compile(r'\b\d{12}\b'),  # AWS Account IDs
+    'aws_arn': re.compile(r'arn:aws[a-z0-9-]*:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[a-zA-Z0-9-_/:.*]+'),
+    'aws_resource_id': re.compile(r'\b(i-[0-9a-f]{8,17}|vol-[0-9a-f]{8,17}|sg-[0-9a-f]{8,17}|vpc-[0-9a-f]{8,17}|subnet-[0-9a-f]{8,17})\b'),
+    'aws_s3_bucket': re.compile(r'\b[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]\.s3[.-][a-z0-9-]+\.amazonaws\.com\b'),
     'password': re.compile(r'(?i)(password|passwd|pwd)["\s]*[:=]["\s]*[^\s"]+|["\'][^"\']+["\']|secret\d+|mypassword\d+'),
     'api_key': re.compile(r'(?i)(api[_-]?key|apikey)["\s]*[:=]["\s]*[^\s"]+|secret\d+|sk-[a-zA-Z0-9]+'),
     'private_key': re.compile(r'-----BEGIN[A-Z\s]+PRIVATE KEY-----.*?-----END[A-Z\s]+PRIVATE KEY-----', re.DOTALL),
@@ -31,7 +35,10 @@ SENSITIVE_PATTERNS = {
     'ip_address': re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'),
     'phone': re.compile(r'(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s][0-9]{3}[-.\s][0-9]{4}'),
     'ssn': re.compile(r'\b\d{3}-?\d{2}-?\d{4}\b'),
-    'credit_card': re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b')
+    'credit_card': re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'),
+    'jwt_token': re.compile(r'\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b'),
+    'bearer_token': re.compile(r'Bearer\s+[A-Za-z0-9_-]+', re.IGNORECASE),
+    'authorization_header': re.compile(r'Authorization:\s*[^\r\n]+', re.IGNORECASE),
 }
 
 # AWS ARN patterns for validation
