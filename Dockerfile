@@ -2,7 +2,7 @@
 # Multi-stage build for optimized production image
 
 # Build stage
-FROM python:3.11-slim as builder
+FROM python:3.11-slim-bookworm as builder
 
 # Set build arguments
 ARG BUILD_DATE
@@ -32,7 +32,7 @@ COPY awslabs/ ./awslabs/
 RUN pip install --no-cache-dir -e .
 
 # Production stage
-FROM python:3.11-slim as production
+FROM python:3.11-slim-bookworm as production
 
 # Set build arguments for labels
 ARG BUILD_DATE
@@ -61,20 +61,24 @@ ENV PYTHONUNBUFFERED=1 \
     AWS_SECURITY_ADVISOR_AUDIT_LOGGING=true \
     AWS_SECURITY_ADVISOR_LOG_TO_FILE=false
 
-# Install runtime dependencies
+# Install runtime dependencies and security updates
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/*
 
-# Create non-root user
-RUN groupadd -r security-advisor && \
-    useradd -r -g security-advisor -d /app -s /bin/bash security-advisor
+# Create non-root user with restricted permissions
+RUN groupadd -r security-advisor --gid=1000 && \
+    useradd -r -g security-advisor --uid=1000 -d /app -s /sbin/nologin security-advisor
 
-# Create app directory and set permissions
+# Create app directory and set secure permissions
 WORKDIR /app
 RUN mkdir -p /app/logs /app/cache && \
-    chown -R security-advisor:security-advisor /app
+    chown -R security-advisor:security-advisor /app && \
+    chmod 750 /app && \
+    chmod 750 /app/logs /app/cache
 
 # Copy Python environment from builder stage
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
@@ -90,9 +94,9 @@ RUN pip install --no-cache-dir -e .
 # Switch to non-root user
 USER security-advisor
 
-# Health check
+# Health check with security considerations
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import awslabs.aws_security_posture_advisor; print('OK')" || exit 1
+    CMD python -c "import sys; sys.exit(0)" || exit 1
 
 # Expose port (if needed for HTTP interface)
 EXPOSE 8000

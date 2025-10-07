@@ -43,8 +43,8 @@ def setup_logging() -> None:
         format=console_format,
         level=LOG_LEVEL,
         colorize=True,
-        backtrace=True,
-        diagnose=True,
+        backtrace=LOG_LEVEL == "DEBUG",  # Only enable in debug mode
+        diagnose=LOG_LEVEL == "DEBUG",   # Only enable in debug mode for security
     )
     
     # File handler if enabled
@@ -67,8 +67,8 @@ def setup_logging() -> None:
             rotation="10 MB",
             retention="7 days",
             compression="gz",
-            backtrace=True,
-            diagnose=True,
+            backtrace=LOG_LEVEL == "DEBUG",  # Only enable in debug mode
+            diagnose=LOG_LEVEL == "DEBUG",   # Only enable in debug mode for security
         )
         
         logger.info(f"File logging enabled: {log_file}")

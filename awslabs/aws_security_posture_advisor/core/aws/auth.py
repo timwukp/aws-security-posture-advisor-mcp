@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 
 from ..common.config import AWS_REGION, get_aws_profile, is_read_only_mode
 from ..common.errors import AuthenticationError, AWSServiceError
+from ..common.security import sanitize_data
 
 
 class AWSSessionManager:
@@ -116,7 +117,8 @@ class AWSSessionManager:
             self._validated_at = datetime.now(timezone.utc)
             
             # Log successful authentication (without sensitive data)
-            logger.info(f"AWS authentication successful - Account: {self._identity['account']}, "
+            sanitized_identity = sanitize_data(self._identity, "caller_identity")
+            logger.info(f"AWS authentication successful - Account: {sanitized_identity.get('account', 'unknown')}, "
                        f"Region: {self.region}, ReadOnly: {is_read_only_mode()}")
             
             # Validate required permissions
@@ -213,9 +215,9 @@ class AWSSessionManager:
         if self._validated_at is None:
             return True
         
-        # Revalidate every hour
+        # Revalidate every 30 minutes for better security
         age = datetime.now(timezone.utc) - self._validated_at
-        return age.total_seconds() > 3600
+        return age.total_seconds() > 1800
     
     def get_caller_identity(self) -> Dict[str, Any]:
         """Get caller identity information.

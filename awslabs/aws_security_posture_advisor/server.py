@@ -25,6 +25,16 @@ from .core.common.errors import (
     SecurityAdvisorError,
     SecurityAdvisorErrorResponse,
 )
+from .core.common.security import (
+    InputValidator,
+    sanitize_data,
+    DataSanitizer,
+)
+from .core.common.middleware import (
+    security_middleware,
+    validate_input_parameters,
+    get_security_middleware,
+)
 from .core.common.logging import (
     audit_log,
     log_mcp_tool_execution,
@@ -56,6 +66,10 @@ server = FastMCP(
     log_level=LOG_LEVEL
 )
 
+# Initialize security components
+_input_validator = InputValidator()
+_data_sanitizer = DataSanitizer()
+
 
 @server.tool(
     name="health_check",
@@ -71,6 +85,7 @@ server = FastMCP(
         openWorldHint=False
     ),
 )
+@security_middleware
 async def health_check(ctx: Context) -> Dict[str, Any] | SecurityAdvisorErrorResponse:
     """Perform health check of the MCP server and AWS connectivity.
     
@@ -285,11 +300,33 @@ async def assess_security_posture(
     assessment_id = str(uuid.uuid4())
     
     try:
+        # Sanitize and validate input parameters
+        scope = _input_validator.validate_string(scope, "scope", max_length=50, required=True)
+        target = _input_validator.validate_string(target, "target", max_length=256, required=True)
+        severity_threshold = _input_validator.validate_string(severity_threshold, "severity_threshold", max_length=20, required=True)
+        
+        # Validate frameworks list
+        if not isinstance(frameworks, list):
+            raise SecurityAdvisorError(
+                message="Frameworks must be a list",
+                error_type="ValidationError"
+            )
+        
+        if len(frameworks) > 10:  # Reasonable limit
+            raise SecurityAdvisorError(
+                message="Too many frameworks specified (maximum 10)",
+                error_type="ValidationError"
+            )
+        
+        # Sanitize framework names
+        frameworks = [_input_validator.validate_string(f, f"framework_{i}", max_length=50, required=True) 
+                     for i, f in enumerate(frameworks)]
+        
         # Validate parameters
         valid_scopes = ["account", "region", "service", "workload"]
         if scope not in valid_scopes:
             raise SecurityAdvisorError(
-                message=f"Invalid scope '{scope}'. Must be one of: {', '.join(valid_scopes)}",
+                message=f"Invalid scope. Must be one of: {', '.join(valid_scopes)}",
                 error_type="ValidationError"
             )
         
@@ -298,7 +335,7 @@ async def assess_security_posture(
             severity_level = SeverityLevel(severity_threshold.upper())
         except ValueError:
             raise SecurityAdvisorError(
-                message=f"Invalid severity threshold '{severity_threshold}'. Must be one of: LOW, MEDIUM, HIGH, CRITICAL",
+                message="Invalid severity threshold. Must be one of: LOW, MEDIUM, HIGH, CRITICAL",
                 error_type="ValidationError"
             )
         
@@ -306,11 +343,15 @@ async def assess_security_posture(
         invalid_frameworks = [f for f in frameworks if not is_supported_framework(f)]
         if invalid_frameworks:
             raise SecurityAdvisorError(
-                message=f"Unsupported frameworks: {', '.join(invalid_frameworks)}. Supported: CIS, NIST, SOC2, PCI-DSS",
+                message="Unsupported frameworks specified. Supported: CIS, NIST, SOC2, PCI-DSS",
                 error_type="ValidationError"
             )
         
-        logger.info(f"Starting security posture assessment - ID: {assessment_id}, Scope: {scope}, Target: {target}")
+        # Sanitize data for logging
+        sanitized_scope = _data_sanitizer.sanitize_text(scope, "scope")
+        sanitized_target = _data_sanitizer.sanitize_text(target, "target")
+        
+        logger.info(f"Starting security posture assessment - ID: {assessment_id}, Scope: {sanitized_scope}, Target: {sanitized_target}")
         
         # Create mock assessment report for demonstration
         report = SecurityAssessmentReport(
@@ -372,30 +413,39 @@ async def assess_security_posture(
         
     except SecurityAdvisorError as e:
         duration_ms = (time.time() - start_time) * 1000
+        
+        # Sanitize error details for logging
+        sanitized_error = _data_sanitizer.sanitize_text(str(e), "error")
+        
         log_mcp_tool_execution("assess_security_posture", {
-            'scope': scope,
-            'target': target,
-            'error': str(e)
+            'scope': sanitized_scope if 'sanitized_scope' in locals() else 'unknown',
+            'target': sanitized_target if 'sanitized_target' in locals() else 'unknown',
+            'error': sanitized_error
         }, duration_ms, False)
         
-        logger.error(f"Security posture assessment failed: {e}")
+        logger.error(f"Security posture assessment failed: {sanitized_error}")
         return SecurityAdvisorErrorResponse.from_exception(e)
         
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
-        log_mcp_tool_execution("assess_security_posture", {
-            'scope': scope,
-            'target': target,
-            'error': str(e)
-        }, duration_ms, False)
         
-        error = SecurityAdvisorError(
-            message=f"Unexpected error during security posture assessment: {str(e)}",
-            error_type="AssessmentError"
+        # Create generic error for unexpected exceptions to prevent information disclosure
+        generic_error = SecurityAdvisorError(
+            message="An unexpected error occurred during security assessment. Please check logs for details.",
+            error_type="InternalError"
         )
         
-        logger.error(f"Unexpected error in security posture assessment: {e}")
-        return SecurityAdvisorErrorResponse.from_exception(error)
+        # Log the actual error for debugging (sanitized)
+        sanitized_error = _data_sanitizer.sanitize_text(str(e), "error")
+        
+        log_mcp_tool_execution("assess_security_posture", {
+            'scope': sanitized_scope if 'sanitized_scope' in locals() else 'unknown',
+            'target': sanitized_target if 'sanitized_target' in locals() else 'unknown',
+            'error': sanitized_error
+        }, duration_ms, False)
+        
+        logger.error(f"Unexpected error in security posture assessment: {sanitized_error}")
+        return SecurityAdvisorErrorResponse.from_exception(generic_error)
 
 
 def main() -> None:

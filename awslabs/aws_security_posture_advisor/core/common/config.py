@@ -31,6 +31,11 @@ AWS_PROFILE = os.getenv('AWS_SECURITY_ADVISOR_PROFILE_NAME')
 # Security Configuration
 READ_ONLY_MODE = os.getenv('AWS_SECURITY_ADVISOR_READ_ONLY', 'true').lower() == 'true'
 ENABLE_AUDIT_LOGGING = os.getenv('AWS_SECURITY_ADVISOR_AUDIT_LOGGING', 'true').lower() == 'true'
+SANITIZE_LOGS = os.getenv('AWS_SECURITY_ADVISOR_SANITIZE_LOGS', 'true').lower() == 'true'
+ENCRYPT_LOGS = os.getenv('AWS_SECURITY_ADVISOR_ENCRYPT_LOGS', 'false').lower() == 'true'
+REQUIRE_TLS = os.getenv('AWS_SECURITY_ADVISOR_REQUIRE_TLS', 'true').lower() == 'true'
+ENABLE_RATE_LIMITING = os.getenv('AWS_SECURITY_ADVISOR_RATE_LIMITING', 'true').lower() == 'true'
+MAX_REQUEST_SIZE = int(os.getenv('AWS_SECURITY_ADVISOR_MAX_REQUEST_SIZE', '1048576'))  # 1MB default
 
 # Logging Configuration
 LOG_LEVEL = os.getenv('FASTMCP_LOG_LEVEL', 'INFO').upper()
