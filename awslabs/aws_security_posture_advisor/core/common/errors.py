@@ -12,6 +12,7 @@ from functools import wraps
 from mcp.types import JSONRPCError, ErrorData
 from pydantic import BaseModel
 from loguru import logger
+from botocore.exceptions import ClientError
 
 T = TypeVar('T')
 
@@ -368,3 +369,149 @@ class SecurityAdvisorErrorResponse(BaseModel):
             error_type=error.error_type,
             context=error.context
         )
+
+
+def exponential_backoff_with_jitter(max_retries: int = 3, base_delay: float = 1.0, max_delay: float = 60.0):
+    """Decorator for exponential backoff with jitter retry logic.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+        
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except RetryableError as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        delay = _calculate_backoff_delay(attempt, base_delay, max_delay)
+                        logger.warning(f"Retrying {func.__name__} after {delay:.2f}s (attempt {attempt + 1}/{max_retries + 1})")
+                        time.sleep(delay)
+                    else:
+                        logger.error(f"Max retries exceeded for {func.__name__}")
+                        break
+                except Exception as e:
+                    # Non-retryable error, fail immediately
+                    raise e
+            
+            # If we get here, all retries failed
+            raise last_exception or SecurityAdvisorError("All retry attempts failed")
+        
+        return wrapper
+    return decorator
+
+
+def _calculate_backoff_delay(attempt: int, base_delay: float = 1.0, max_delay: float = 60.0) -> float:
+    """Calculate exponential backoff delay with jitter.
+    
+    Args:
+        attempt: Current attempt number (0-based)
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+        
+    Returns:
+        float: Delay in seconds with jitter applied
+    """
+    delay = min(base_delay * (2 ** attempt), max_delay)
+    jitter = random.uniform(0.1, 0.3) * delay
+    return delay + jitter
+
+
+def handle_aws_client_error(service: str, operation: str):
+    """Decorator to handle AWS ClientError exceptions.
+    
+    Args:
+        service: AWS service name
+        operation: AWS operation name
+        
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            try:
+                return func(*args, **kwargs)
+            except ClientError as e:
+                raise _convert_client_error(e, service, operation)
+        return wrapper
+    return decorator
+
+
+def _convert_client_error(error: ClientError, service: str, operation: str) -> SecurityAdvisorError:
+    """Convert AWS ClientError to appropriate SecurityAdvisorError.
+    
+    Args:
+        error: Boto3 ClientError
+        service: AWS service name
+        operation: AWS operation name
+        
+    Returns:
+        SecurityAdvisorError: Appropriate error type based on AWS error
+    """
+    error_code = error.response.get('Error', {}).get('Code', 'Unknown')
+    
+    if error_code in ['Throttling', 'ThrottlingException', 'TooManyRequestsException']:
+        return ThrottlingError(service)
+    elif error_code in ['ServiceUnavailable', 'InternalServerError']:
+        return ServiceUnavailableError(service)
+    elif error_code in ['AccessDenied', 'UnauthorizedOperation', 'Forbidden']:
+        return AuthenticationError(
+            message=f"Access denied for {service}:{operation}",
+            credential_type="permissions"
+        )
+    else:
+        return AWSServiceError(
+            service=service,
+            operation=operation,
+            aws_error=error,
+            message=str(error)
+        )
+
+
+class GracefulDegradationMixin:
+    """Mixin for graceful degradation when services are unavailable."""
+    
+    def __init__(self):
+        self._degraded_services = set()
+    
+    def mark_service_degraded(self, service: str):
+        """Mark a service as degraded."""
+        self._degraded_services.add(service)
+        logger.warning(f"Service {service} marked as degraded")
+    
+    def is_service_degraded(self, service: str) -> bool:
+        """Check if a service is marked as degraded."""
+        return service in self._degraded_services
+    
+    def clear_service_degradation(self, service: str):
+        """Clear degradation status for a service."""
+        self._degraded_services.discard(service)
+        logger.info(f"Service {service} degradation cleared")
+
+
+class PartialResultError(SecurityAdvisorError):
+    """Error indicating partial results due to service issues."""
+    
+    def __init__(self, message: str, partial_data: Optional[Dict[str, Any]] = None):
+        """Initialize PartialResultError.
+        
+        Args:
+            message: Human-readable error message
+            partial_data: Any partial data that was successfully retrieved
+        """
+        super().__init__(
+            message=message,
+            error_type="PartialResultError",
+            context={"partial_data": partial_data or {}}
+        )
+        self.partial_data = partial_data or {}

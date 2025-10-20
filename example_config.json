@@ -1,0 +1,16 @@
+{
+  "server_name": "aws-security-posture-advisor",
+  "server_path": "awslabs/aws_security_posture_advisor/server.py",
+  "aws_region": "us-east-1",
+  "log_level": "INFO",
+  "example_usage": {
+    "assess_security_posture": {
+      "scope": "account",
+      "target": "<YOUR_AWS_ACCOUNT_ID>",
+      "frameworks": [
+        "CIS"
+      ],
+      "severity_threshold": "MEDIUM"
+    }
+  }
+}

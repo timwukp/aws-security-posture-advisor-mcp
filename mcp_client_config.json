@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "aws-security-posture-advisor": {
+      "command": "/Users/tmwu/aws-security-posture-advisor-mcp/.venv/bin/awslabs.aws-security-posture-advisor",
+      "env": {
+        "AWS_REGION": "us-east-1",
+        "FASTMCP_LOG_LEVEL": "INFO",
+        "AWS_SECURITY_ADVISOR_READ_ONLY": "true"
+      },
+      "disabled": false,
+      "autoApprove": ["health_check", "get_server_info"]
+    }
+  }
+}

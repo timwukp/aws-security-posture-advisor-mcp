@@ -187,6 +187,22 @@ class ComplianceControl:
 
 
 # Pydantic models for API responses
+class ThreatIndicator(BaseModel):
+    """Threat indicator model for GuardDuty findings."""
+    
+    type: str = Field(..., description="Indicator type (IP, domain, hash, etc.)")
+    value: str = Field(..., description="Indicator value")
+    confidence: Optional[float] = Field(None, ge=0, le=1, description="Confidence score")
+    source: Optional[str] = Field(None, description="Threat intelligence source")
+    first_seen: Optional[datetime] = Field(None, description="First seen timestamp")
+    last_seen: Optional[datetime] = Field(None, description="Last seen timestamp")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
 class SecurityAssessmentReport(BaseModel):
     """Security assessment report response model."""
     

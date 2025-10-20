@@ -239,3 +239,20 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Security-sensitive files
+*.pem
+*.key
+credentials
+config
+*_results.json
+*_report.json
+security_scan.py
+compare_repos.py
+repo_comparison_analysis.json
+
+# Test results and temporary files
+test_results.json
+mock_assessment_results.json
+real_assessment_results.json
+comprehensive_security_report.json

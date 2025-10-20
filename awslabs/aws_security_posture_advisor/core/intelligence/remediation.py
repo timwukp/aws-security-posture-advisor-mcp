@@ -349,3 +349,101 @@ class RemediationAdvisor:
                 message=f"Failed to generate recommendations: {str(e)}",
                 error_type="RemediationError"
             )
+
+@dataclass
+class RemediationPlan:
+    """Comprehensive remediation plan for security issues."""
+    
+    plan_id: str
+    title: str
+    description: str
+    recommendations: List['SecurityRecommendation']
+    
+    # Timeline and effort
+    estimated_duration: timedelta
+    total_effort_hours: float
+    complexity: RemediationComplexity
+    
+    # Cost analysis
+    estimated_cost: float
+    cost_savings: Optional[float] = None
+    roi_months: Optional[int] = None
+    
+    # Dependencies and prerequisites
+    prerequisites: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
+    
+    # Execution phases
+    phases: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Validation and rollback
+    validation_steps: List[str] = field(default_factory=list)
+    rollback_plan: Optional[str] = None
+    
+    # Metadata
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_by: str = "AWS Security Posture Advisor"
+    
+    def get_total_recommendations(self) -> int:
+        """Get total number of recommendations in the plan."""
+        return len(self.recommendations)
+    
+    def get_critical_recommendations(self) -> List['SecurityRecommendation']:
+        """Get critical priority recommendations."""
+        return [rec for rec in self.recommendations if rec.priority == RemediationPriority.CRITICAL]
+    
+    def get_estimated_completion_date(self) -> datetime:
+        """Calculate estimated completion date."""
+        return self.created_at + self.estimated_duration
+
+
+@dataclass
+class RemediationValidationResult:
+    """Result of remediation validation."""
+    
+    validation_id: str
+    plan_id: str
+    recommendation_id: Optional[str] = None
+    
+    # Validation status
+    is_successful: bool = False
+    validation_score: float = 0.0  # 0-100
+    
+    # Test results
+    tests_passed: int = 0
+    tests_failed: int = 0
+    tests_skipped: int = 0
+    
+    # Detailed results
+    validation_details: Dict[str, Any] = field(default_factory=dict)
+    error_messages: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    
+    # Performance impact
+    performance_impact: Optional[Dict[str, Any]] = None
+    
+    # Security improvement metrics
+    security_improvement: Optional[Dict[str, Any]] = None
+    
+    # Compliance validation
+    compliance_validation: Optional[Dict[str, Any]] = None
+    
+    # Metadata
+    validated_at: datetime = field(default_factory=datetime.utcnow)
+    validation_duration: Optional[timedelta] = None
+    
+    def get_success_rate(self) -> float:
+        """Calculate validation success rate."""
+        total_tests = self.tests_passed + self.tests_failed
+        if total_tests == 0:
+            return 0.0
+        return (self.tests_passed / total_tests) * 100.0
+    
+    def has_critical_errors(self) -> bool:
+        """Check if validation has critical errors."""
+        return any("critical" in msg.lower() for msg in self.error_messages)
+    
+    def get_validation_summary(self) -> str:
+        """Get human-readable validation summary."""
+        status = "PASSED" if self.is_successful else "FAILED"
+        return f"Validation {status}: {self.tests_passed}/{self.tests_passed + self.tests_failed} tests passed"
