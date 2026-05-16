@@ -1,0 +1,10 @@
+{
+  "app": "python3 app.py",
+  "context": {
+    "region": "us-east-1",
+    "cpu": "512",
+    "memory": "1024",
+    "desired_count": "1",
+    "enable_alb": "true"
+  }
+}
