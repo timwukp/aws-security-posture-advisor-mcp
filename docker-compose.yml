@@ -1,5 +1,5 @@
 # Docker Compose configuration for AWS Security Posture Advisor MCP Server
-version: '3.8'
+# Docker Compose file (version field removed - deprecated in modern Docker Compose)
 
 services:
   # Main MCP server service
@@ -46,8 +46,9 @@ services:
     
     # Volume mounts
     volumes:
-      # AWS credentials (if using files)
-      - ${HOME}/.aws:/app/.aws:ro
+      # AWS credentials (mount only the specific profile config, not the entire .aws directory)
+      - ${AWS_SHARED_CREDENTIALS_FILE:-${HOME}/.aws/credentials}:/app/.aws/credentials:ro
+      - ${AWS_CONFIG_FILE:-${HOME}/.aws/config}:/app/.aws/config:ro
       
       # Configuration
       - ${PWD}/config:/app/config:ro
@@ -106,7 +107,8 @@ services:
     
     volumes:
       - ${PWD}:/app:rw
-      - ${HOME}/.aws:/app/.aws:ro
+      - ${AWS_SHARED_CREDENTIALS_FILE:-${HOME}/.aws/credentials}:/app/.aws/credentials:ro
+      - ${AWS_CONFIG_FILE:-${HOME}/.aws/config}:/app/.aws/config:ro
       - security-advisor-dev-logs:/app/logs
     
     networks:
@@ -127,7 +129,7 @@ services:
       - cache
     restart: unless-stopped
     
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-securepassword}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
     
     volumes:
       - security-advisor-redis:/data
@@ -182,7 +184,7 @@ services:
     restart: unless-stopped
     
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set}
       - GF_USERS_ALLOW_SIGN_UP=false
     
     volumes:

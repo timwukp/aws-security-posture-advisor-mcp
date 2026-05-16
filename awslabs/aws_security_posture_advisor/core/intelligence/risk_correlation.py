@@ -5,7 +5,7 @@ to identify attack patterns, multi-stage attacks, and prioritize risks based on 
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -84,7 +84,7 @@ class RiskAssessment:
     risk_factors: Dict[str, float] = field(default_factory=dict)
     recommendations: List[str] = field(default_factory=list)
     timeline: List[Dict[str, Any]] = field(default_factory=list)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -354,12 +354,19 @@ class RiskCorrelationEngine:
     
     def _determine_pattern_severity(self, findings: List[SecurityFinding]) -> SeverityLevel:
         """Determine severity level for attack pattern."""
+        severity_order = {
+            SeverityLevel.INFORMATIONAL: 0,
+            SeverityLevel.LOW: 1,
+            SeverityLevel.MEDIUM: 2,
+            SeverityLevel.HIGH: 3,
+            SeverityLevel.CRITICAL: 4,
+        }
         max_severity = SeverityLevel.LOW
-        
+
         for finding in findings:
-            if finding.severity.value > max_severity.value:
+            if severity_order.get(finding.severity, 0) > severity_order.get(max_severity, 0):
                 max_severity = finding.severity
-        
+
         return max_severity
     
     async def _calculate_risk_score(self, findings: List[SecurityFinding], 

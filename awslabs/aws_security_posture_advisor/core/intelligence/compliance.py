@@ -7,7 +7,7 @@ collection for various compliance frameworks including CIS, NIST, SOC2, and PCI-
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from loguru import logger
 
@@ -94,7 +94,7 @@ class ComplianceEvidence:
             return False
         
         expiry_time = self.collected_at + self.validity_period
-        return datetime.utcnow() > expiry_time
+        return datetime.now(timezone.utc) > expiry_time
 
 
 @dataclass
@@ -317,7 +317,7 @@ class ComplianceIntelligence:
                 )
             
             # Generate assessment ID
-            assessment_id = f"{framework.lower()}_assessment_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            assessment_id = f"{framework.lower()}_assessment_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
             
             # Map findings to controls
             control_mappings = await self._map_findings_to_controls(
@@ -369,7 +369,7 @@ class ComplianceIntelligence:
                 assessment_id=assessment_id,
                 framework=framework,
                 scope=scope,
-                assessment_date=datetime.utcnow(),
+                assessment_date=datetime.now(timezone.utc),
                 overall_compliance_score=overall_score,
                 total_controls=total_controls,
                 compliant_controls=compliant_controls,
@@ -382,7 +382,7 @@ class ComplianceIntelligence:
                 medium_priority_gaps=prioritized_gaps["medium"],
                 low_priority_gaps=prioritized_gaps["low"],
                 remediation_timeline=remediation_timeline,
-                next_assessment_due=datetime.utcnow() + timedelta(days=90)
+                next_assessment_due=datetime.now(timezone.utc) + timedelta(days=90)
             )
             
             self.logger.info(
@@ -528,7 +528,7 @@ class ComplianceIntelligence:
                 severity=severity,
                 compliant_resources=len([f for f in findings if f.severity == SeverityLevel.LOW]),
                 non_compliant_resources=len(failed_findings + warning_findings),
-                last_assessed=datetime.utcnow()
+                last_assessed=datetime.now(timezone.utc)
             )
             
             control_results.append(control)
@@ -632,12 +632,12 @@ class ComplianceIntelligence:
         for control in control_results:
             # Generate evidence based on control type and status
             evidence = ComplianceEvidence(
-                evidence_id=f"{control.control_id}_evidence_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                evidence_id=f"{control.control_id}_evidence_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
                 control_id=control.control_id,
                 evidence_type="AUTOMATED_CHECK",
                 description=f"Automated compliance check for {control.title}",
                 source="AWS Security Posture Advisor",
-                collected_at=datetime.utcnow(),
+                collected_at=datetime.now(timezone.utc),
                 validity_period=timedelta(days=30),
                 evidence_data={
                     "control_status": control.status.value,
@@ -667,7 +667,7 @@ class ComplianceIntelligence:
             RemediationTimeline: Generated remediation timeline
         """
         timeline = RemediationTimeline(
-            timeline_id=f"{framework.lower()}_remediation_{datetime.utcnow().strftime('%Y%m%d')}",
+            timeline_id=f"{framework.lower()}_remediation_{datetime.now(timezone.utc).strftime('%Y%m%d')}",
             framework=framework,
             total_gaps=len(gaps)
         )
@@ -695,6 +695,6 @@ class ComplianceIntelligence:
         
         # Calculate totals
         timeline.pending_actions = len(gaps)
-        timeline.estimated_completion_date = datetime.utcnow() + timedelta(days=180)  # 6 months
+        timeline.estimated_completion_date = datetime.now(timezone.utc) + timedelta(days=180)  # 6 months
         
         return timeline

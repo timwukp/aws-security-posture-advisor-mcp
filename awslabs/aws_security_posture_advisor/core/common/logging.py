@@ -7,7 +7,7 @@ considerations and audit trail capabilities.
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -145,7 +145,7 @@ def audit_log(action: str, details: Dict[str, Any], user_context: Optional[str] 
         return
     
     audit_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "action": action,
         "user_context": user_context or "unknown",
         "details": sanitize_sensitive_data(details),

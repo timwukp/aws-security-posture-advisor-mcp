@@ -96,7 +96,7 @@ USER security-advisor
 
 # Health check with security considerations
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)" || exit 1
+    CMD python -c "from awslabs.aws_security_posture_advisor.core.common.config import validate_configuration; validate_configuration(); print('OK')" || exit 1
 
 # Expose port (if needed for HTTP interface)
 EXPOSE 8000

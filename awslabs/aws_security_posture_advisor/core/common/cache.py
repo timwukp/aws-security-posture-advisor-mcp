@@ -6,7 +6,6 @@ resilience and performance when AWS services are unavailable or slow.
 
 import asyncio
 import json
-import pickle
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Union, Callable, TypeVar
@@ -140,11 +139,15 @@ class MemoryCache:
 
 
 class PersistentCache:
-    """Persistent cache using file system storage."""
-    
+    """Persistent cache using file system storage with JSON serialization.
+
+    Uses JSON instead of pickle to avoid deserialization vulnerabilities.
+    Only JSON-serializable data can be cached persistently.
+    """
+
     def __init__(self, cache_dir: Union[str, Path], default_ttl: int = 3600):
         """Initialize persistent cache.
-        
+
         Args:
             cache_dir: Directory to store cache files
             default_ttl: Default time to live in seconds
@@ -152,74 +155,87 @@ class PersistentCache:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.default_ttl = default_ttl
-    
+
     def _get_cache_file(self, key: str) -> Path:
         """Get cache file path for key."""
-        # Use hash to avoid filesystem issues with special characters
         import hashlib
-        key_hash = hashlib.md5(key.encode()).hexdigest()
-        return self.cache_dir / f"{key_hash}.cache"
-    
+        key_hash = hashlib.sha256(key.encode()).hexdigest()
+        return self.cache_dir / f"{key_hash}.json"
+
     def get(self, key: str) -> Optional[Any]:
         """Get cached data by key.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             Optional[Any]: Cached data if available and not expired
         """
         cache_file = self._get_cache_file(key)
-        
+
         if not cache_file.exists():
             return None
-        
+
         try:
-            with open(cache_file, 'rb') as f:
-                entry = pickle.load(f)
-            
-            if entry.is_expired:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+
+            timestamp = raw.get('timestamp', 0)
+            ttl_seconds = raw.get('ttl_seconds', self.default_ttl)
+            age = time.time() - timestamp
+
+            if age > ttl_seconds:
                 logger.debug(f"Persistent cache entry expired for key: {key}")
                 cache_file.unlink(missing_ok=True)
                 return None
-            
-            logger.debug(f"Persistent cache hit for key: {key} (age: {entry.age_seconds:.1f}s)")
-            return entry.data
-            
-        except Exception as e:
+
+            logger.debug(f"Persistent cache hit for key: {key} (age: {age:.1f}s)")
+            return raw.get('data')
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"Failed to read persistent cache for key {key}: {e}")
             cache_file.unlink(missing_ok=True)
             return None
-    
+        except Exception as e:
+            logger.warning(f"Unexpected error reading persistent cache for key {key}: {e}")
+            cache_file.unlink(missing_ok=True)
+            return None
+
     def set(self, key: str, data: Any, ttl_seconds: Optional[int] = None) -> None:
         """Set cached data.
-        
+
         Args:
             key: Cache key
-            data: Data to cache
+            data: Data to cache (must be JSON-serializable)
             ttl_seconds: Time to live in seconds (uses default if None)
         """
         if ttl_seconds is None:
             ttl_seconds = self.default_ttl
-        
+
         cache_file = self._get_cache_file(key)
-        entry = CacheEntry(data, ttl_seconds)
-        
+        entry = {
+            'data': data,
+            'timestamp': time.time(),
+            'ttl_seconds': ttl_seconds,
+        }
+
         try:
-            with open(cache_file, 'wb') as f:
-                pickle.dump(entry, f)
-            
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(entry, f, default=str)
+
             logger.debug(f"Persistently cached data for key: {key} (TTL: {ttl_seconds}s)")
-            
+
+        except (TypeError, ValueError) as e:
+            logger.warning(f"Data not JSON-serializable for key {key}: {e}")
         except Exception as e:
             logger.warning(f"Failed to write persistent cache for key {key}: {e}")
-    
+
     def delete(self, key: str) -> bool:
         """Delete cached data.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             bool: True if key was deleted, False if not found
         """
@@ -229,38 +245,41 @@ class PersistentCache:
             logger.debug(f"Deleted persistent cache entry for key: {key}")
             return True
         return False
-    
+
     def clear(self) -> None:
         """Clear all cached data."""
-        for cache_file in self.cache_dir.glob("*.cache"):
+        for cache_file in self.cache_dir.glob("*.json"):
             cache_file.unlink()
         logger.debug("Cleared all persistent cache entries")
-    
+
     def cleanup_expired(self) -> int:
         """Remove all expired cache files.
-        
+
         Returns:
             int: Number of files removed
         """
         removed_count = 0
-        
-        for cache_file in self.cache_dir.glob("*.cache"):
+
+        for cache_file in self.cache_dir.glob("*.json"):
             try:
-                with open(cache_file, 'rb') as f:
-                    entry = pickle.load(f)
-                
-                if entry.is_expired:
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    raw = json.load(f)
+
+                timestamp = raw.get('timestamp', 0)
+                ttl_seconds = raw.get('ttl_seconds', self.default_ttl)
+
+                if time.time() - timestamp > ttl_seconds:
                     cache_file.unlink()
                     removed_count += 1
-                    
+
             except Exception as e:
                 logger.warning(f"Failed to check cache file {cache_file}: {e}")
-                cache_file.unlink()
+                cache_file.unlink(missing_ok=True)
                 removed_count += 1
-        
+
         if removed_count > 0:
             logger.debug(f"Cleaned up {removed_count} expired persistent cache entries")
-        
+
         return removed_count
 
 

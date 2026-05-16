@@ -96,7 +96,6 @@ all = [
 [project.scripts]
 "awslabs.aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
 "aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
-"security-advisor-version" = "scripts.version:main"
 
 [project.entry-points."mcp.servers"]
 "aws-security-posture-advisor" = "awslabs.aws_security_posture_advisor.server:main"
@@ -112,7 +111,7 @@ Changelog = "https://github.com/awslabs/aws-security-posture-advisor-mcp/blob/ma
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["awslabs*", "scripts*"]
+include = ["awslabs*"]
 
 [tool.setuptools.package-data]
 "awslabs.aws_security_posture_advisor" = ["py.typed"]

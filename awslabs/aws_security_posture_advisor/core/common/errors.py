@@ -354,23 +354,6 @@ class ServiceUnavailableError(RetryableError):
         )
 
 
-class SecurityAdvisorErrorResponse(BaseModel):
-    """Standardized error response format for MCP tools."""
-    
-    detail: str
-    error_type: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-    
-    @classmethod
-    def from_exception(cls, error: SecurityAdvisorError) -> "SecurityAdvisorErrorResponse":
-        """Create error response from SecurityAdvisorError."""
-        return cls(
-            detail=error.message,
-            error_type=error.error_type,
-            context=error.context
-        )
-
-
 def exponential_backoff_with_jitter(max_retries: int = 3, base_delay: float = 1.0, max_delay: float = 60.0):
     """Decorator for exponential backoff with jitter retry logic.
     
