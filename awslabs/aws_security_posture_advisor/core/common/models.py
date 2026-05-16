@@ -228,7 +228,7 @@ class SecurityAssessmentReport(BaseModel):
     recommendations: List[Dict[str, Any]] = Field(default_factory=list, description="Security recommendations")
     
     # Metadata
-    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Report generation timestamp")
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Report generation timestamp")
     region: Optional[str] = Field(None, description="AWS region")
     
     class Config:
@@ -260,7 +260,7 @@ class ThreatAnalysisReport(BaseModel):
     remediation_plan: Dict[str, Any] = Field(default_factory=dict, description="Recommended remediation plan")
     
     # Metadata
-    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Report generation timestamp")
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Report generation timestamp")
     
     class Config:
         json_encoders = {
@@ -289,7 +289,7 @@ class ComplianceReport(BaseModel):
     remediation_timeline: Optional[Dict[str, Any]] = Field(None, description="Remediation timeline")
     
     # Metadata
-    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Report generation timestamp")
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Report generation timestamp")
     
     class Config:
         json_encoders = {
@@ -341,7 +341,7 @@ class SecurityReport(BaseModel):
     detailed_sections: Dict[str, Any] = Field(default_factory=dict, description="Detailed report sections")
     
     # Metadata
-    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Report generation timestamp")
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Report generation timestamp")
     generated_by: str = Field(default="AWS Security Posture Advisor", description="Report generator")
     region: Optional[str] = Field(None, description="AWS region")
     
@@ -383,7 +383,7 @@ class SecurityValidationReport(BaseModel):
     validation_method: str = Field(default="systems_manager", description="Validation method used")
     
     # Metadata
-    generated_at: datetime = Field(default_factory=datetime.utcnow, description="Report generation timestamp")
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Report generation timestamp")
     region: Optional[str] = Field(None, description="AWS region")
     
     class Config:

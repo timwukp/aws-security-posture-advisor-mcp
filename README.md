@@ -592,30 +592,25 @@ aws-security-posture-advisor-mcp/
 │       └── core/
 │           ├── aws/                     # AWS service integrations
 │           ├── common/                  # Common utilities and models
-│           ├── intelligence/            # AI/ML analysis engines
-│           └── services/                # Security service implementations
+│           ├── intelligence/            # Risk correlation & compliance engines
+│           └── kb/                      # Knowledge base
+├── tests/                               # Pytest unit tests
+│   ├── conftest.py                     # Shared fixtures
+│   ├── test_models.py                  # Data model tests
+│   ├── test_errors.py                  # Error handling tests
+│   ├── test_cache.py                   # Caching system tests
+│   ├── test_intelligence.py            # Intelligence engine tests
+│   └── test_security.py               # Security module tests
+├── scripts/                             # Utility and assessment scripts
+├── examples/                            # Usage examples and configs
 ├── docs/                                # Documentation
-│   ├── API.md                          # API documentation
-│   ├── SECURITY.md                     # Security best practices
-│   └── TROUBLESHOOTING.md              # Troubleshooting guide
-├── tests/                               # Test files
-│   ├── run_all_tests.py                # Complete test framework
-│   ├── test_server_status.py           # Server health validation
-│   ├── test_assessment.py              # Assessment testing
-│   └── test_functionality.py           # Functionality verification
-├── tools/                               # Security assessment tools
-│   ├── assess_security.py              # Real AWS security assessment
-│   ├── security_recommendations_report.py  # Executive reporting
-│   ├── comprehensive_security_audit.py # Advanced audit
-│   └── verify_deployment.py            # Deployment validation
-├── examples/                            # Usage examples
-│   ├── usage_example.py                # Practical demonstrations
-│   ├── mcp_client_test.py              # Client integration
-│   └── example_config.json             # Configuration template
-├── ENHANCEMENTS.md                      # Enhancement documentation
-├── SECURITY_COMPLIANCE.md              # Security audit results
-├── README.md                           # This file
-└── pyproject.toml                      # Project configuration
+│   ├── API.md
+│   ├── SECURITY.md
+│   └── TROUBLESHOOTING.md
+├── Dockerfile                           # Multi-stage production build
+├── docker-compose.yml                   # Container orchestration
+├── pyproject.toml                       # Project configuration
+└── README.md                           # This file
 ```
 
 ## 📈 Performance & Scalability
@@ -646,13 +641,15 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install in development mode
-pip install -e .
+pip install -e ".[dev]"
 
 # Run tests
-python run_all_tests.py
+pytest
 
 # Run linting and formatting
-pre-commit run --all-files
+ruff check .
+black --check .
+mypy .
 ```
 
 ### Customization Options
@@ -696,7 +693,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ### Development Workflow
 1. Fork the repository
 2. Create a feature branch
-3. Run tests: `python run_all_tests.py`
+3. Run tests: `pytest`
 4. Submit a pull request with comprehensive description
 
 ## Support
@@ -706,44 +703,6 @@ For issues and questions:
 - **GitHub Issues**: [Report a bug or request a feature](https://github.com/timwukp/aws-security-posture-advisor-mcp/issues)
 - **Documentation**: [Read the full documentation](https://github.com/timwukp/aws-security-posture-advisor-mcp#readme)
 - **Security Issues**: Please report security concerns responsibly
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
-
----
-
-**🎉 Ready for Production**: This enhanced version includes comprehensive testing (100% pass rate), real AWS integration, executive reporting, and zero security vulnerabilities. Perfect for enterprise deployment!
-│   │   ├── intelligence/            # Intelligence engines
-│   │   ├── common/                  # Shared utilities
-│   │   └── kb/                      # Knowledge base
-│   └── scripts/                     # Utility scripts
-├── tests/                           # Test suite
-└── docs/                           # Documentation
-```
-
-## Security Considerations
-
-- **Read-Only by Default**: Server operates in read-only mode by default
-- **Credential Security**: No long-term credentials stored; uses IAM roles and profiles
-- **Audit Logging**: Comprehensive audit trail for all security operations
-- **Data Sanitization**: Sensitive data automatically sanitized in logs
-- **Least Privilege**: Minimal required IAM permissions
-
-## License
-
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-## Support
-
-For issues and questions:
-
-- GitHub Issues: [Report a bug or request a feature](https://github.com/awslabs/aws-security-posture-advisor-mcp/issues)
-- Documentation: [Read the full documentation](https://github.com/awslabs/aws-security-posture-advisor-mcp#readme)
 
 ## Changelog
 

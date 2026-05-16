@@ -5,14 +5,14 @@ automation identification, and step-by-step guidance for security improvements.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 import json
 from loguru import logger
 
-from ..common.models import SecurityFinding, SeverityLevel, ComplianceControl
+from ..common.models import SecurityFinding, SeverityLevel, ComplianceControl, ComplianceStatus
 from ..common.errors import SecurityAdvisorError
 
 
@@ -114,7 +114,7 @@ class SecurityRecommendation:
     risk_score_improvement: float = 0.0
     prerequisites: List[str] = field(default_factory=list)
     references: List[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -350,6 +350,226 @@ class RemediationAdvisor:
                 error_type="RemediationError"
             )
 
+    def _group_findings_by_type(self, findings: List[SecurityFinding]) -> Dict[str, List[SecurityFinding]]:
+        """Group security findings by their type/category for batch remediation.
+
+        Args:
+            findings: List of security findings
+
+        Returns:
+            Dict mapping finding type keys to lists of findings
+        """
+        groups: Dict[str, List[SecurityFinding]] = {}
+
+        for finding in findings:
+            # Determine finding type based on title keywords and source
+            finding_type = self._classify_finding_type(finding)
+            if finding_type not in groups:
+                groups[finding_type] = []
+            groups[finding_type].append(finding)
+
+        return groups
+
+    def _classify_finding_type(self, finding: SecurityFinding) -> str:
+        """Classify a finding into a remediation type based on its content.
+
+        Args:
+            finding: Security finding to classify
+
+        Returns:
+            str: Remediation type key (e.g. 'enable_mfa', 'encrypt_ebs_volumes')
+        """
+        title_lower = finding.title.lower()
+        desc_lower = finding.description.lower()
+        combined = f"{title_lower} {desc_lower}"
+
+        if any(kw in combined for kw in ['mfa', 'multi-factor', 'multifactor', 'authentication']):
+            return 'enable_mfa'
+        elif any(kw in combined for kw in ['encrypt', 'unencrypted', 'ebs', 'volume encryption']):
+            return 'encrypt_ebs_volumes'
+        elif any(kw in combined for kw in ['cloudtrail', 'logging', 'audit trail', 'log']):
+            return 'enable_cloudtrail'
+        elif any(kw in combined for kw in ['security group', 'inbound', '0.0.0.0', 'open access', 'unrestricted']):
+            return 'configure_security_groups'
+        elif any(kw in combined for kw in ['public access', 's3', 'bucket']):
+            return 'configure_security_groups'
+        else:
+            return 'general_security'
+
+    async def _create_recommendation_for_findings(
+        self, finding_type: str, findings: List[SecurityFinding]
+    ) -> Optional[SecurityRecommendation]:
+        """Create a remediation recommendation for a group of related findings.
+
+        Args:
+            finding_type: The classified type of findings
+            findings: List of related findings
+
+        Returns:
+            SecurityRecommendation or None if no template matches
+        """
+        import uuid
+
+        template = self.remediation_templates.get(finding_type)
+        if not template:
+            # Create a generic recommendation for unmatched types
+            template = {
+                "title": f"Address {finding_type.replace('_', ' ').title()} Issues",
+                "description": f"Remediate {len(findings)} security finding(s) related to {finding_type.replace('_', ' ')}",
+                "category": RemediationCategory.CONFIGURATION,
+                "complexity": RemediationComplexity.MODERATE,
+                "steps": [],
+                "automation_available": False,
+                "estimated_effort_hours": 4.0,
+                "risk_score_improvement": 10.0,
+            }
+
+        # Build remediation steps from template
+        steps = []
+        for i, step_data in enumerate(template.get("steps", []), 1):
+            steps.append(RemediationStep(
+                step_number=i,
+                title=step_data.get("title", f"Step {i}"),
+                description=step_data.get("description", ""),
+                aws_service=step_data.get("aws_service"),
+                cli_command=step_data.get("cli_command"),
+                console_url=step_data.get("console_url"),
+                automation_script=step_data.get("automation_script"),
+                validation_method=step_data.get("validation_method"),
+            ))
+
+        # Determine priority from finding severities
+        severity_order = {
+            SeverityLevel.INFORMATIONAL: 0,
+            SeverityLevel.LOW: 1,
+            SeverityLevel.MEDIUM: 2,
+            SeverityLevel.HIGH: 3,
+            SeverityLevel.CRITICAL: 4,
+        }
+        max_severity = max(findings, key=lambda f: severity_order.get(f.severity, 0)).severity
+
+        if max_severity == SeverityLevel.CRITICAL:
+            priority = RemediationPriority.CRITICAL
+        elif max_severity == SeverityLevel.HIGH:
+            priority = RemediationPriority.HIGH
+        elif max_severity == SeverityLevel.MEDIUM:
+            priority = RemediationPriority.MEDIUM
+        else:
+            priority = RemediationPriority.LOW
+
+        # Build cost-benefit analysis
+        cost_model = self.cost_models.get(finding_type, {})
+        cost_benefit = CostBenefitAnalysis(
+            implementation_cost=cost_model.get("implementation_cost", 100.0),
+            operational_cost_monthly=cost_model.get("operational_cost_monthly", 0.0),
+            risk_reduction_percentage=cost_model.get("risk_reduction_percentage", 50.0),
+            compliance_improvement=min(len(findings) * 5.0, 100.0),
+            automation_potential=0.8 if template.get("automation_available") else 0.2,
+        )
+
+        recommendation = SecurityRecommendation(
+            recommendation_id=f"rec-{uuid.uuid4().hex[:12]}",
+            title=template["title"],
+            description=template["description"],
+            category=template["category"],
+            priority=priority,
+            complexity=template["complexity"],
+            affected_findings=[f.finding_id for f in findings],
+            affected_resources=list({rid for f in findings for rid in f.get_resource_ids()}),
+            compliance_frameworks=list({fw for f in findings for fw in f.get_compliance_frameworks()}),
+            remediation_steps=steps,
+            cost_benefit=cost_benefit,
+            automation_available=template.get("automation_available", False),
+            estimated_effort_hours=template.get("estimated_effort_hours", 4.0),
+            risk_score_improvement=template.get("risk_score_improvement", 10.0),
+        )
+
+        return recommendation
+
+    async def _generate_compliance_recommendations(
+        self, compliance_gaps: List[ComplianceControl]
+    ) -> List[SecurityRecommendation]:
+        """Generate recommendations specifically for compliance gaps.
+
+        Args:
+            compliance_gaps: List of non-compliant controls
+
+        Returns:
+            List of SecurityRecommendation for compliance remediation
+        """
+        import uuid
+
+        recommendations = []
+
+        for control in compliance_gaps:
+            if control.status == ComplianceStatus.FAILED:
+                priority = RemediationPriority.HIGH
+            else:
+                priority = RemediationPriority.MEDIUM
+
+            recommendation = SecurityRecommendation(
+                recommendation_id=f"comp-rec-{uuid.uuid4().hex[:12]}",
+                title=f"Remediate: {control.title}",
+                description=f"Address compliance gap for {control.framework} control {control.control_id}: {control.description}",
+                category=RemediationCategory.COMPLIANCE,
+                priority=priority,
+                complexity=RemediationComplexity.MODERATE,
+                compliance_frameworks=[control.framework],
+                remediation_steps=[
+                    RemediationStep(
+                        step_number=1,
+                        title=f"Review {control.control_id} requirements",
+                        description=f"Review the requirements for {control.framework} control {control.control_id}",
+                        aws_service=control.aws_config_rule or "Config",
+                    ),
+                    RemediationStep(
+                        step_number=2,
+                        title="Implement required changes",
+                        description=f"Implement changes to bring {control.non_compliant_resources} resources into compliance",
+                    ),
+                    RemediationStep(
+                        step_number=3,
+                        title="Validate compliance",
+                        description="Run compliance check to verify remediation",
+                        validation_method="Re-run compliance assessment",
+                    ),
+                ],
+                estimated_effort_hours=3.0,
+                risk_score_improvement=15.0,
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
+    def _prioritize_recommendations(
+        self, recommendations: List[SecurityRecommendation]
+    ) -> List[SecurityRecommendation]:
+        """Sort recommendations by priority, risk improvement, and effort.
+
+        Args:
+            recommendations: List of recommendations to prioritize
+
+        Returns:
+            Sorted list with highest priority first
+        """
+        priority_order = {
+            RemediationPriority.CRITICAL: 4,
+            RemediationPriority.HIGH: 3,
+            RemediationPriority.MEDIUM: 2,
+            RemediationPriority.LOW: 1,
+        }
+
+        return sorted(
+            recommendations,
+            key=lambda r: (
+                priority_order.get(r.priority, 0),
+                r.risk_score_improvement,
+                -r.estimated_effort_hours,  # prefer less effort
+            ),
+            reverse=True,
+        )
+
+
 @dataclass
 class RemediationPlan:
     """Comprehensive remediation plan for security issues."""
@@ -381,7 +601,7 @@ class RemediationPlan:
     rollback_plan: Optional[str] = None
     
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: str = "AWS Security Posture Advisor"
     
     def get_total_recommendations(self) -> int:
@@ -429,7 +649,7 @@ class RemediationValidationResult:
     compliance_validation: Optional[Dict[str, Any]] = None
     
     # Metadata
-    validated_at: datetime = field(default_factory=datetime.utcnow)
+    validated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     validation_duration: Optional[timedelta] = None
     
     def get_success_rate(self) -> float:

@@ -51,6 +51,7 @@ from .core.common.models import (
     ComplianceControl,
     ComplianceStatus,
     is_supported_framework,
+    get_severity_score,
 )
 from .core.aws.security_hub import SecurityHubClient
 from .core.aws.guardduty import GuardDutyClient
@@ -294,7 +295,7 @@ async def assess_security_posture(
     """
     import time
     import uuid
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     start_time = time.time()
     assessment_id = str(uuid.uuid4())
@@ -353,49 +354,143 @@ async def assess_security_posture(
         
         logger.info(f"Starting security posture assessment - ID: {assessment_id}, Scope: {sanitized_scope}, Target: {sanitized_target}")
         
-        # Create mock assessment report for demonstration
+        # --- Real AWS Integration ---
+        # Credentials are resolved at runtime from the environment:
+        # - IAM role (EC2/ECS/Lambda)
+        # - AWS_PROFILE / AWS_SECURITY_ADVISOR_PROFILE_NAME env var
+        # - Default credential chain (env vars, ~/.aws/credentials)
+        # NO credentials are ever stored in this codebase.
+
+        # Initialize AWS clients
+        security_hub_client = SecurityHubClient(region=AWS_REGION)
+        guardduty_client = GuardDutyClient(region=AWS_REGION)
+        config_client = ConfigClient(region=AWS_REGION)
+
+        # Collect findings from Security Hub
+        all_findings: List[SecurityFinding] = []
+        try:
+            hub_findings = security_hub_client.get_findings(
+                severity_threshold=severity_level,
+                compliance_frameworks=frameworks,
+                max_results=200,
+                time_range_days=30,
+            )
+            all_findings.extend(hub_findings)
+            logger.info(f"Retrieved {len(hub_findings)} findings from Security Hub")
+        except Exception as hub_err:
+            logger.warning(f"Security Hub retrieval failed (degraded mode): {hub_err}")
+
+        # Collect findings from GuardDuty
+        try:
+            gd_findings = guardduty_client.get_findings(
+                severity_threshold=severity_level,
+                max_results=100,
+                time_range_days=30,
+            )
+            all_findings.extend(gd_findings)
+            logger.info(f"Retrieved {len(gd_findings)} findings from GuardDuty")
+        except Exception as gd_err:
+            logger.warning(f"GuardDuty retrieval failed (degraded mode): {gd_err}")
+
+        # Run risk correlation
+        risk_engine = RiskCorrelationEngine()
+        risk_assessment = await risk_engine.analyze_risk(all_findings)
+
+        # Run compliance intelligence per framework
+        compliance_engine = ComplianceIntelligence()
+        compliance_status_map = {}
+        for framework in frameworks:
+            try:
+                comp_assessment = await compliance_engine.assess_compliance(
+                    framework=framework,
+                    findings=all_findings,
+                )
+                compliance_status_map[framework] = {
+                    'overall_score': comp_assessment.overall_compliance_score,
+                    'status': 'COMPLIANT' if comp_assessment.overall_compliance_score >= 95 else 'NON_COMPLIANT',
+                    'passed_controls': comp_assessment.compliant_controls,
+                    'failed_controls': comp_assessment.non_compliant_controls,
+                    'total_controls': comp_assessment.total_controls,
+                }
+            except Exception as comp_err:
+                logger.warning(f"Compliance assessment for {framework} failed: {comp_err}")
+                compliance_status_map[framework] = {
+                    'overall_score': 0.0,
+                    'status': 'ERROR',
+                    'passed_controls': 0,
+                    'failed_controls': 0,
+                    'total_controls': 0,
+                }
+
+        # Generate recommendations if requested
+        recommendations_list = []
+        if include_recommendations:
+            try:
+                remediation_engine = RemediationAdvisor()
+                recs = await remediation_engine.generate_recommendations(all_findings)
+                recommendations_list = [
+                    {
+                        'recommendation_id': rec.recommendation_id,
+                        'title': rec.title,
+                        'priority': rec.priority.value,
+                        'description': rec.description,
+                        'affected_resources': len(rec.affected_resources),
+                        'category': rec.category.value,
+                        'complexity': rec.complexity.value,
+                        'automation_available': rec.automation_available,
+                    }
+                    for rec in recs[:10]  # Top 10 recommendations
+                ]
+            except Exception as rem_err:
+                logger.warning(f"Recommendation generation failed: {rem_err}")
+
+        # Categorize findings by severity
+        severity_counts = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0, 'INFORMATIONAL': 0}
+        for f in all_findings:
+            severity_counts[f.severity.value] = severity_counts.get(f.severity.value, 0) + 1
+
+        # Build top findings list
+        sorted_findings = sorted(
+            all_findings,
+            key=lambda f: get_severity_score(f.severity),
+            reverse=True,
+        )
+        top_findings_list = [
+            {
+                'finding_id': f.finding_id,
+                'title': f.title,
+                'severity': f.severity.value,
+                'description': f.description[:200],
+                'source_service': f.source_service,
+                'resource_count': len(f.resources),
+            }
+            for f in sorted_findings[:10]
+        ]
+
+        # Calculate overall score from risk assessment and compliance
+        compliance_scores = [v['overall_score'] for v in compliance_status_map.values() if v['overall_score'] > 0]
+        avg_compliance = sum(compliance_scores) / len(compliance_scores) if compliance_scores else 0.0
+        # Blend: 40% inverse risk score + 60% compliance score
+        overall_score = round((1.0 - risk_assessment.risk_score / 100.0) * 40 + avg_compliance * 0.6, 1)
+        overall_score = max(0.0, min(100.0, overall_score))
+
         report = SecurityAssessmentReport(
             assessment_id=assessment_id,
             scope=scope,
             target=target,
             frameworks=frameworks,
-            overall_score=75.5,
-            risk_level="MEDIUM",
-            total_findings=42,
-            critical_findings=2,
-            high_findings=8,
-            medium_findings=15,
-            low_findings=17,
-            compliance_status={
-                framework: {
-                    'overall_score': 78.0,
-                    'status': 'NON_COMPLIANT',
-                    'passed_controls': 39,
-                    'failed_controls': 11,
-                    'total_controls': 50
-                } for framework in frameworks
-            },
-            top_findings=[
-                {
-                    'finding_id': f'finding-{i}',
-                    'title': f'Security finding {i}',
-                    'severity': 'HIGH' if i <= 3 else 'MEDIUM',
-                    'description': f'Description for finding {i}',
-                    'source_service': 'SecurityHub',
-                    'resource_count': i + 1
-                } for i in range(1, 11)
-            ],
-            recommendations=[
-                {
-                    'recommendation_id': f'rec-{i}',
-                    'title': f'Recommendation {i}',
-                    'priority': 'HIGH' if i <= 2 else 'MEDIUM',
-                    'description': f'Recommendation description {i}',
-                    'affected_resources': i * 2
-                } for i in range(1, 6)
-            ] if include_recommendations else [],
+            overall_score=overall_score,
+            risk_level=risk_assessment.overall_risk_level.value,
+            total_findings=len(all_findings),
+            critical_findings=severity_counts.get('CRITICAL', 0),
+            high_findings=severity_counts.get('HIGH', 0),
+            medium_findings=severity_counts.get('MEDIUM', 0),
+            low_findings=severity_counts.get('LOW', 0),
+            compliance_status=compliance_status_map,
+            top_findings=top_findings_list,
+            recommendations=recommendations_list,
             region=AWS_REGION,
-            generated_at=datetime.utcnow()
+            generated_at=datetime.now(timezone.utc),
         )
         
         # Log successful execution

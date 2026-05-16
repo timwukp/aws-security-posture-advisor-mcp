@@ -116,7 +116,7 @@ class SystemsManagerClient:
         """
         # Mock implementation for demonstration
         return {
-            'monitoring_date': datetime.utcnow().isoformat(),
+            'monitoring_date': datetime.now(timezone.utc).isoformat(),
             'drift_detected': [],
             'controls_monitored': len(control_ids),
             'baseline_date': baseline_date.isoformat()

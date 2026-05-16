@@ -21,7 +21,7 @@ from .errors import ValidationError, SecurityAdvisorError
 # Sensitive data patterns that should be redacted
 SENSITIVE_PATTERNS = {
     'aws_access_key': re.compile(r'AKIA[0-9A-Z]{16}', re.IGNORECASE),
-    'aws_secret_key': re.compile(r'[A-Za-z0-9/+=]{40}'),
+    'aws_secret_key': re.compile(r'(?i)(?:aws_secret_access_key|secret_key|secretkey|aws_secret)\s*[=:]\s*["\']?([A-Za-z0-9/+=]{40})["\']?'),
     'aws_session_token': re.compile(r'[A-Za-z0-9/+=]{100,}'),
     'aws_account_id': re.compile(r'\b\d{12}\b'),  # AWS Account IDs
     'aws_arn': re.compile(r'arn:aws[a-z0-9-]*:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[a-zA-Z0-9-_/:.*]+'),

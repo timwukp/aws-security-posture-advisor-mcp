@@ -242,8 +242,8 @@ class SecurityHubClient(GracefulDegradationMixin):
         
         # Time range filter
         if time_range_days:
-            from datetime import datetime, timedelta
-            cutoff_date = datetime.utcnow() - timedelta(days=time_range_days)
+            from datetime import datetime, timedelta, timezone
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=time_range_days)
             finding_filters['UpdatedAt'] = [
                 {
                     'Start': cutoff_date.isoformat() + 'Z',
@@ -287,7 +287,38 @@ class SecurityHubClient(GracefulDegradationMixin):
         
         threshold_index = severity_order.index(threshold)
         return [s.value for s in severity_order[threshold_index:]]
-    
+
+    def _get_framework_standard_arns(self, framework: str) -> List[str]:
+        """Get Security Hub standards subscription ARN prefixes for a compliance framework.
+
+        These prefixes are used to filter findings by compliance framework.
+        The ARNs correspond to the Security Hub standards subscription identifiers.
+
+        Args:
+            framework: Compliance framework name (CIS, NIST, SOC2, PCI-DSS)
+
+        Returns:
+            List[str]: Standards ARN prefixes for filtering
+        """
+        # Mapping of framework names to their Security Hub standards identifiers
+        framework_arn_map: Dict[str, List[str]] = {
+            "CIS": [
+                "cis-aws-foundations-benchmark",
+                "aws-foundational-security-best-practices",
+            ],
+            "NIST": [
+                "nist-800-53",
+            ],
+            "SOC2": [
+                "service-organization-control",
+            ],
+            "PCI-DSS": [
+                "pci-dss",
+            ],
+        }
+
+        return framework_arn_map.get(framework.upper(), [])
+
     def _normalize_finding(self, raw_finding: Dict[str, Any]) -> SecurityFinding:
         """Normalize a raw Security Hub finding to unified format.
         
